@@ -1,0 +1,144 @@
+!pip install nltk rouge-score
+!pip install scikit-learn
+import nltk
+from rouge_score import rouge_scorer
+from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction
+
+# Ensure necessary NLTK data is downloaded
+# The original line was: nltk.download('punkt')
+nltk.download('punkt_tab') # Download punkt_tab instead of just punkt
+
+
+def evaluate_rag_model(predictions, references):
+    """
+    Evaluate RAG model using BLEU and ROUGE scores.
+
+    Args:
+    predictions (list of str): The generated text from the RAG model.
+    references (list of str): The reference ground truth text.
+
+    Returns:
+    dict: BLEU and ROUGE scores.
+    """
+    # BLEU score
+    bleu_scores = []
+    for prediction, reference in zip(predictions, references):
+        reference_tokens = nltk.word_tokenize(reference.lower())
+        prediction_tokens = nltk.word_tokenize(prediction.lower())
+
+        # Use smoothing function for BLEU
+        smoothie = SmoothingFunction().method1
+        bleu_score = sentence_bleu([reference_tokens], prediction_tokens, smoothing_function=smoothie)
+        bleu_scores.append(bleu_score)
+
+    avg_bleu_score = sum(bleu_scores) / len(bleu_scores) if bleu_scores else 0
+
+    # ROUGE score
+    rouge_scorer_instance = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+    rouge_scores = {'rouge1': [], 'rouge2': [], 'rougeL': []}
+
+    for prediction, reference in zip(predictions, references):
+        scores = rouge_scorer_instance.score(reference, prediction)
+        rouge_scores['rouge1'].append(scores['rouge1'].fmeasure)
+        rouge_scores['rouge2'].append(scores['rouge2'].fmeasure)
+        rouge_scores['rougeL'].append(scores['rougeL'].fmeasure)
+
+    avg_rouge_scores = {
+        'rouge1': sum(rouge_scores['rouge1']) / len(rouge_scores['rouge1']),
+        'rouge2': sum(rouge_scores['rouge2']) / len(rouge_scores['rouge2']),
+        'rougeL': sum(rouge_scores['rougeL']) / len(rouge_scores['rougeL']),
+    }
+
+    # Final Results
+    results = {
+        'avg_bleu_score': avg_bleu_score,
+        'avg_rouge1_score': avg_rouge_scores['rouge1'],
+        'avg_rouge2_score': avg_rouge_scores['rouge2'],
+        'avg_rougeL_score': avg_rouge_scores['rougeL'],
+    }
+
+    return results
+
+# Example usage
+predictions = [
+    "Macronutrients are the nutrients that are needed in large amounts by the human body. There are three classes of macronutrients: carbohydrates, lipids, and proteins. These macronutrients can be metabolically processed into cellular energy.  Carbohydrates are molecules composed of carbon, hydrogen, and oxygen. Proteins are macromolecules composed of chains of subunits called amino acids. Lipids are molecules that are composed of fatty acids and glycerol. Water is also a macronutrient in the sense that you require a large amount of it, but unlike the other macronutrients, it does not yield calories."
+
+
+]
+references = [
+
+"Macronutrients Nutrients that are needed in large amounts are called macronutrients. There are three classes of macronutrients: carbohydrates, lipids, and proteins. These can be metabolically processed into cellular energy. The energy from macronutrients comes from their chemical bonds. This chemical energy is converted into cellular energy that is then utilized to perform work, allowing our bodies to conduct their basic functions. A unit of measurement of food energy is the calorie. On nutrition food labels the amount given for “calories” is actually equivalent to each calorie multiplied by one thousand. A kilocalorie (one thousand calories, denoted with a small “c”) is synonymous with the “Calorie” (with a capital “C”) on nutrition food labels. Water is also a macronutrient in the sense that you require a large amount of it, but unlike the other macronutrients, it does not yield calories. Carbohydrates Carbohydrates are molecules composed of carbon, hydrogen, and oxygen."
+
+]
+
+results = evaluate_rag_model(predictions, references)
+print("Evaluation Results:")
+print(f"Average BLEU Score: {results['avg_bleu_score']:.4f}")
+print(f"Average ROUGE-1 Score: {results['avg_rouge1_score']:.4f}")
+print(f"Average ROUGE-2 Score: {results['avg_rouge2_score']:.4f}")
+print(f"Average ROUGE-L Score: {results['avg_rougeL_score']:.4f}")
+
+
+..............................
+
+
+from sklearn.metrics import precision_score, recall_score, f1_score
+from sklearn.metrics import confusion_matrix
+import numpy as np
+
+# Function to calculate Precision, Recall, F1 Score for text comparison
+def calculate_metrics(y_true, y_pred):
+    """
+    Calculate Precision, Recall, and F1 Score between ground truth (y_true) and model-generated (y_pred) text.
+    
+    Args:
+    - y_true: list of reference text (ground truth)
+    - y_pred: list of generated text (model output)
+    
+    Returns:
+    - precision: Precision score
+    - recall: Recall score
+    - f1: F1 Score
+    """
+    # Tokenize and convert texts to a binary representation (1 if word exists in the text, else 0)
+    y_true_tokens = [set(true.split()) for true in y_true]
+    y_pred_tokens = [set(pred.split()) for pred in y_pred]
+    
+    # Flatten the sets of tokens into individual word lists for comparison
+    all_words = set([word for sublist in y_true_tokens + y_pred_tokens for word in sublist])
+
+    # Create binary vectors for precision, recall, and F1 score
+    y_true_binary = [[1 if word in tokens else 0 for word in all_words] for tokens in y_true_tokens]
+    y_pred_binary = [[1 if word in tokens else 0 for word in all_words] for tokens in y_pred_tokens]
+    
+    # Convert to numpy arrays for use in scikit-learn metrics
+    y_true_array = np.array(y_true_binary)
+    y_pred_array = np.array(y_pred_binary)
+    
+    # Calculate Precision, Recall, and F1 score using sklearn
+    precision = precision_score(y_true_array, y_pred_array, average='micro')
+    recall = recall_score(y_true_array, y_pred_array, average='micro')
+    f1 = f1_score(y_true_array, y_pred_array, average='micro')
+
+    return precision, recall, f1
+
+
+# Example ground truth (reference) text
+y_true = [
+    "Macronutrients Nutrients that are needed in large amounts are called macronutrients. There are three classes of macronutrients: carbohydrates, lipids, and proteins. These can be metabolically processed into cellular energy. The energy from macronutrients comes from their chemical bonds. This chemical energy is converted into cellular energy that is then utilized to perform work, allowing our bodies to conduct their basic functions. A unit of measurement of food energy is the calorie. On nutrition food labels the amount given for “calories” is actually equivalent to each calorie multiplied by one thousand. A kilocalorie (one thousand calories, denoted with a small “c”) is synonymous with the “Calorie” (with a capital “C”) on nutrition food labels. Water is also a macronutrient in the sense that you require a large amount of it, but unlike the other macronutrients, it does not yield calories. Carbohydrates Carbohydrates are molecules composed of carbon, hydrogen, and oxygen."
+   
+]
+
+# Example generated text (model output)
+y_pred = [
+    "Macronutrients are the nutrients that are needed in large amounts by the human body. There are three classes of macronutrients: carbohydrates, lipids, and proteins. These macronutrients can be metabolically processed into cellular energy.  Carbohydrates are molecules composed of carbon, hydrogen, and oxygen. Proteins are macromolecules composed of chains of subunits called amino acids. Lipids are molecules that are composed of fatty acids and glycerol. Water is also a macronutrient in the sense that you require a large amount of it, but unlike the other macronutrients, it does not yield calories."
+    
+]
+
+# Calculate Precision, Recall, and F1 Score
+precision, recall, f1 = calculate_metrics(y_true, y_pred)
+
+print(f"Precision: {precision:.4f}")
+print(f"Recall: {recall:.4f}")
+print(f"F1 Score: {f1:.4f}")
+
